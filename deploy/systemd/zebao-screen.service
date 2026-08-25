@@ -1,0 +1,16 @@
+[Unit]
+Description=Zebao Screen Server on Raspberry Pi
+After=network-online.target reachy-mini-daemon.service
+Wants=network-online.target
+
+[Service]
+Environment=DAEMON_HOST=127.0.0.1
+Environment=DAEMON_PORT=8000
+ExecStart=/venvs/mini_daemon/bin/python /home/roger/eyes_server/server.py
+WorkingDirectory=/home/roger/eyes_server
+Restart=always
+RestartSec=3
+User=roger
+
+[Install]
+WantedBy=multi-user.target

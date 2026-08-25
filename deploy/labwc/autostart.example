@@ -1,0 +1,70 @@
+#!/bin/sh
+
+# Zebao eyes kiosk for Raspberry Pi labwc session.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/1000}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+export CHROME_LOG_FILE=/tmp/zebao-eyes-chromium.log
+export XCURSOR_PATH="/home/roger/.icons:/usr/share/icons"
+export XCURSOR_THEME=zebao-invisible
+export XCURSOR_SIZE=1
+
+install_invisible_cursor() {
+  python3 - <<'PY'
+from pathlib import Path
+import struct
+
+cursor_dir = Path("/home/roger/.icons/zebao-invisible/cursors")
+cursor_dir.mkdir(parents=True, exist_ok=True)
+data = struct.pack("<IIII", 0x72756358, 16, 1, 1)
+data += struct.pack("<III", 0xFFFD0002, 1, 28)
+data += struct.pack("<IIIIIIIII", 36, 0xFFFD0002, 1, 1, 1, 1, 0, 0, 0)
+data += struct.pack("<I", 0)
+names = [
+    "left_ptr", "default", "arrow", "pointer", "hand1", "hand2",
+    "xterm", "watch", "progress", "crosshair", "text", "not-allowed",
+]
+for name in names:
+    (cursor_dir / name).write_bytes(data)
+PY
+}
+
+start_chromium() {
+  install_invisible_cursor
+  mkdir -p /home/roger/.cache/zebao-eyes-kiosk-chromium
+  chromium \
+    --user-data-dir=/home/roger/.cache/zebao-eyes-kiosk-chromium \
+    --ozone-platform=wayland \
+    --enable-features=UseOzonePlatform \
+    --kiosk \
+    --start-fullscreen \
+    --no-first-run \
+    --no-default-browser-check \
+    --noerrdialogs \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --hide-scrollbars \
+    --hide-cursor \
+    --ash-hide-cursor \
+    --disable-application-cache \
+    --disk-cache-size=1 \
+    --media-cache-size=1 \
+    --password-store=basic \
+    --use-mock-keychain \
+    --disable-component-update \
+    --disable-features=Translate,AutofillServerCommunication \
+    --disable-gpu-compositing \
+    --disable-software-rasterizer \
+    --max-frame-rate=15 \
+    --window-size=800,480 \
+    "http://localhost:8080/?nc=$(date +%s)" &
+}
+
+pkill -x chromium 2>/dev/null || true
+pkill -x chrome_crashpad 2>/dev/null || true
+sleep 2
+start_chromium
+
+while true; do
+  pgrep -f 'chromium.*localhost:8080' >/dev/null 2>&1 || start_chromium
+  sleep 30
+done &

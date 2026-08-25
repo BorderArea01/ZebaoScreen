@@ -1,0 +1,781 @@
+"""
+Eye expression scripts for Reachy Mini emotions and dances.
+
+Each script is a list of (relative_time, mood) tuples.
+Relative time is 0.0 to 1.0, representing the fraction of the total move duration.
+The eyes server converts these to absolute timings using the move duration.
+"""
+
+# Default script for unlisted moves — subtle blink-like variation
+_DEFAULT = [(0.0, "normal")]
+
+# ============================================================
+# Emotion scripts (relative time 0.0 → 1.0)
+# ============================================================
+
+EMOTION_SCRIPTS = {
+    # --- Happy family ---
+    "happy1": [
+        (0.0, "normal"),
+        (0.08, "happy"),
+        (0.5, "laughing"),
+        (0.8, "happy"),
+        (1.0, "normal"),
+    ],
+    "cheerful1": [
+        (0.0, "normal"),
+        (0.05, "cheerful"),
+        (0.3, "enthusiastic"),
+        (0.7, "cheerful"),
+        (1.0, "normal"),
+    ],
+    "enthusiastic1": [
+        (0.0, "normal"),
+        (0.05, "enthusiastic"),
+        (0.25, "success"),
+        (0.6, "enthusiastic"),
+        (0.85, "cheerful"),
+        (1.0, "normal"),
+    ],
+    "enthusiastic2": [
+        (0.0, "normal"),
+        (0.08, "cheerful"),
+        (0.4, "enthusiastic"),
+        (0.75, "cheerful"),
+        (1.0, "normal"),
+    ],
+    "laughing1": [
+        (0.0, "normal"),
+        (0.05, "happy"),
+        (0.2, "laughing"),
+        (0.5, "happy"),
+        (0.7, "laughing"),
+        (0.9, "happy"),
+        (1.0, "normal"),
+    ],
+    "laughing2": [
+        (0.0, "normal"),
+        (0.1, "happy"),
+        (0.4, "laughing"),
+        (0.7, "happy"),
+        (1.0, "normal"),
+    ],
+    "grateful1": [
+        (0.0, "normal"),
+        (0.08, "grateful"),
+        (0.5, "loving"),
+        (0.85, "grateful"),
+        (1.0, "normal"),
+    ],
+    "helpful1": [
+        (0.0, "normal"),
+        (0.08, "helpful"),
+        (0.5, "welcoming"),
+        (0.85, "helpful"),
+        (1.0, "normal"),
+    ],
+    "helpful2": [
+        (0.0, "normal"),
+        (0.1, "helpful"),
+        (0.5, "grateful"),
+        (0.85, "helpful"),
+        (1.0, "normal"),
+    ],
+    "success1": [
+        (0.0, "normal"),
+        (0.05, "cheerful"),
+        (0.2, "success"),
+        (0.5, "proud"),
+        (0.8, "success"),
+        (1.0, "normal"),
+    ],
+    "success2": [
+        (0.0, "normal"),
+        (0.08, "success"),
+        (0.4, "proud"),
+        (0.7, "success"),
+        (1.0, "normal"),
+    ],
+    "welcoming1": [
+        (0.0, "normal"),
+        (0.05, "welcoming"),
+        (0.4, "happy"),
+        (0.8, "welcoming"),
+        (1.0, "normal"),
+    ],
+    "welcoming2": [
+        (0.0, "normal"),
+        (0.08, "welcoming"),
+        (0.5, "grateful"),
+        (0.85, "welcoming"),
+        (1.0, "normal"),
+    ],
+    "yes1": [
+        (0.0, "normal"),
+        (0.1, "yes"),
+        (0.5, "happy"),
+        (0.85, "yes"),
+        (1.0, "normal"),
+    ],
+    "yes_sad1": [
+        (0.0, "normal"),
+        (0.1, "yes_sad"),
+        (0.5, "resigned"),
+        (0.85, "yes_sad"),
+        (1.0, "normal"),
+    ],
+    "relief1": [
+        (0.0, "normal"),
+        (0.08, "relief"),
+        (0.5, "calming"),
+        (0.85, "relief"),
+        (1.0, "normal"),
+    ],
+    "relief2": [
+        (0.0, "normal"),
+        (0.08, "relief"),
+        (0.5, "serenity"),
+        (0.85, "relief"),
+        (1.0, "normal"),
+    ],
+    "come1": [
+        (0.0, "normal"),
+        (0.08, "come"),
+        (0.4, "welcoming"),
+        (0.8, "come"),
+        (1.0, "normal"),
+    ],
+    "loving1": [
+        (0.0, "normal"),
+        (0.05, "loving"),
+        (0.35, "grateful"),
+        (0.7, "loving"),
+        (1.0, "normal"),
+    ],
+    "proud1": [
+        (0.0, "normal"),
+        (0.08, "proud"),
+        (0.4, "success"),
+        (0.75, "proud"),
+        (1.0, "normal"),
+    ],
+    "proud2": [
+        (0.0, "normal"),
+        (0.1, "proud"),
+        (0.5, "happy"),
+        (0.85, "proud"),
+        (1.0, "normal"),
+    ],
+    "proud3": [
+        (0.0, "normal"),
+        (0.05, "enthusiastic"),
+        (0.3, "proud"),
+        (0.6, "success"),
+        (0.85, "proud"),
+        (1.0, "normal"),
+    ],
+
+    # --- Surprise family ---
+    "surprised1": [
+        (0.0, "normal"),
+        (0.08, "surprised"),
+        (0.5, "amazed"),
+        (0.85, "surprised"),
+        (1.0, "normal"),
+    ],
+    "surprised2": [
+        (0.0, "normal"),
+        (0.08, "surprised"),
+        (0.4, "amazed"),
+        (0.7, "surprised"),
+        (1.0, "normal"),
+    ],
+    "amazed1": [
+        (0.0, "normal"),
+        (0.05, "amazed"),
+        (0.3, "surprised"),
+        (0.6, "amazed"),
+        (0.85, "surprised"),
+        (1.0, "normal"),
+    ],
+    "curious1": [
+        (0.0, "normal"),
+        (0.1, "curious"),
+        (0.4, "inquiring"),
+        (0.7, "curious"),
+        (1.0, "normal"),
+    ],
+    "oops1": [
+        (0.0, "normal"),
+        (0.08, "oops"),
+        (0.4, "surprised"),
+        (0.8, "oops"),
+        (1.0, "normal"),
+    ],
+    "oops2": [
+        (0.0, "normal"),
+        (0.1, "oops"),
+        (0.45, "curious"),
+        (0.8, "oops"),
+        (1.0, "normal"),
+    ],
+    "fear1": [
+        (0.0, "normal"),
+        (0.05, "fear"),
+        (0.3, "scared"),
+        (0.7, "fear"),
+        (1.0, "normal"),
+    ],
+    "scared1": [
+        (0.0, "normal"),
+        (0.03, "scared"),
+        (0.25, "fear"),
+        (0.6, "scared"),
+        (0.85, "anxiety"),
+        (1.0, "normal"),
+    ],
+
+    # --- Sad family ---
+    "sad1": [
+        (0.0, "normal"),
+        (0.1, "sad"),
+        (0.5, "downcast"),
+        (0.85, "sad"),
+        (1.0, "normal"),
+    ],
+    "sad2": [
+        (0.0, "normal"),
+        (0.08, "downcast"),
+        (0.4, "lonely"),
+        (0.75, "downcast"),
+        (1.0, "normal"),
+    ],
+    "downcast1": [
+        (0.0, "normal"),
+        (0.1, "downcast"),
+        (0.5, "resigned"),
+        (0.85, "downcast"),
+        (1.0, "normal"),
+    ],
+    "lonely1": [
+        (0.0, "normal"),
+        (0.12, "lonely"),
+        (0.5, "downcast"),
+        (0.85, "lonely"),
+        (1.0, "normal"),
+    ],
+    "lost1": [
+        (0.0, "normal"),
+        (0.08, "lost"),
+        (0.3, "confused"),
+        (0.6, "uncertain"),
+        (0.85, "lost"),
+        (1.0, "normal"),
+    ],
+    "resigned1": [
+        (0.0, "normal"),
+        (0.1, "resigned"),
+        (0.5, "tired"),
+        (0.85, "resigned"),
+        (1.0, "normal"),
+    ],
+    "tired1": [
+        (0.0, "normal"),
+        (0.1, "tired"),
+        (0.4, "exhausted"),
+        (0.7, "tired"),
+        (1.0, "normal"),
+    ],
+    "exhausted1": [
+        (0.0, "normal"),
+        (0.08, "exhausted"),
+        (0.5, "tired"),
+        (0.85, "exhausted"),
+        (1.0, "normal"),
+    ],
+    "uncomfortable1": [
+        (0.0, "normal"),
+        (0.1, "uncomfortable"),
+        (0.5, "anxiety"),
+        (0.85, "uncomfortable"),
+        (1.0, "normal"),
+    ],
+    "shy1": [
+        (0.0, "normal"),
+        (0.12, "shy"),
+        (0.5, "uncertain"),
+        (0.85, "shy"),
+        (1.0, "normal"),
+    ],
+    "uncertain1": [
+        (0.0, "normal"),
+        (0.1, "uncertain"),
+        (0.5, "confused"),
+        (0.85, "uncertain"),
+        (1.0, "normal"),
+    ],
+    "anxiety1": [
+        (0.0, "normal"),
+        (0.08, "anxiety"),
+        (0.4, "fear"),
+        (0.75, "anxiety"),
+        (1.0, "normal"),
+    ],
+    "displeased1": [
+        (0.0, "normal"),
+        (0.1, "displeased"),
+        (0.5, "uncertain"),
+        (0.85, "displeased"),
+        (1.0, "normal"),
+    ],
+    "displeased2": [
+        (0.0, "normal"),
+        (0.08, "displeased"),
+        (0.4, "irritated"),
+        (0.75, "displeased"),
+        (1.0, "normal"),
+    ],
+
+    # --- Angry family ---
+    "furious1": [
+        (0.0, "normal"),
+        (0.05, "furious"),
+        (0.3, "rage"),
+        (0.65, "furious"),
+        (1.0, "normal"),
+    ],
+    "rage1": [
+        (0.0, "normal"),
+        (0.03, "rage"),
+        (0.25, "furious"),
+        (0.55, "rage"),
+        (0.8, "angry"),
+        (1.0, "normal"),
+    ],
+    "frustrated1": [
+        (0.0, "normal"),
+        (0.1, "frustrated"),
+        (0.5, "impatient"),
+        (0.85, "frustrated"),
+        (1.0, "normal"),
+    ],
+    "irritated1": [
+        (0.0, "normal"),
+        (0.1, "irritated"),
+        (0.5, "frustrated"),
+        (0.85, "irritated"),
+        (1.0, "normal"),
+    ],
+    "irritated2": [
+        (0.0, "normal"),
+        (0.08, "irritated"),
+        (0.4, "reprimand"),
+        (0.75, "irritated"),
+        (1.0, "normal"),
+    ],
+    "disgusted1": [
+        (0.0, "normal"),
+        (0.08, "disgusted"),
+        (0.5, "contempt"),
+        (0.85, "disgusted"),
+        (1.0, "normal"),
+    ],
+    "contempt1": [
+        (0.0, "normal"),
+        (0.1, "contempt"),
+        (0.5, "disgusted"),
+        (0.85, "contempt"),
+        (1.0, "normal"),
+    ],
+    "impatient1": [
+        (0.0, "normal"),
+        (0.08, "impatient"),
+        (0.5, "frustrated"),
+        (0.85, "impatient"),
+        (1.0, "normal"),
+    ],
+    "impatient2": [
+        (0.0, "normal"),
+        (0.1, "impatient"),
+        (0.45, "irritated"),
+        (0.8, "impatient"),
+        (1.0, "normal"),
+    ],
+    "reprimand1": [
+        (0.0, "normal"),
+        (0.1, "reprimand"),
+        (0.5, "angry"),
+        (0.85, "reprimand"),
+        (1.0, "normal"),
+    ],
+    "reprimand2": [
+        (0.0, "normal"),
+        (0.08, "reprimand"),
+        (0.4, "furious"),
+        (0.75, "reprimand"),
+        (1.0, "normal"),
+    ],
+    "reprimand3": [
+        (0.0, "normal"),
+        (0.1, "reprimand"),
+        (0.5, "irritated"),
+        (0.85, "reprimand"),
+        (1.0, "normal"),
+    ],
+    "go_away1": [
+        (0.0, "normal"),
+        (0.1, "go_away"),
+        (0.5, "angry"),
+        (0.85, "go_away"),
+        (1.0, "normal"),
+    ],
+
+    # --- Sleepy family ---
+    "sleep1": [
+        (0.0, "normal"),
+        (0.1, "sleepy"),
+        (0.4, "sleep"),
+        (0.7, "sleepy"),
+        (1.0, "normal"),
+    ],
+    "boredom1": [
+        (0.0, "normal"),
+        (0.12, "boredom"),
+        (0.5, "indifferent"),
+        (0.85, "boredom"),
+        (1.0, "normal"),
+    ],
+    "boredom2": [
+        (0.0, "normal"),
+        (0.1, "boredom"),
+        (0.4, "sleepy"),
+        (0.7, "boredom"),
+        (1.0, "normal"),
+    ],
+    "dying1": [
+        (0.0, "normal"),
+        (0.1, "dying"),
+        (0.5, "exhausted"),
+        (0.85, "dying"),
+        (1.0, "normal"),
+    ],
+    "indifferent1": [
+        (0.0, "normal"),
+        (0.1, "indifferent"),
+        (0.5, "boredom"),
+        (0.85, "indifferent"),
+        (1.0, "normal"),
+    ],
+    "serenity1": [
+        (0.0, "normal"),
+        (0.08, "serenity"),
+        (0.5, "calming"),
+        (0.85, "serenity"),
+        (1.0, "normal"),
+    ],
+    "calming1": [
+        (0.0, "normal"),
+        (0.1, "calming"),
+        (0.5, "serenity"),
+        (0.85, "calming"),
+        (1.0, "normal"),
+    ],
+
+    # --- Complex / Special ---
+    "confused1": [
+        (0.0, "normal"),
+        (0.1, "confused"),
+        (0.5, "incomprehensible"),
+        (0.85, "confused"),
+        (1.0, "normal"),
+    ],
+    "incomprehensible2": [
+        (0.0, "normal"),
+        (0.1, "incomprehensible"),
+        (0.5, "confused"),
+        (0.85, "incomprehensible"),
+        (1.0, "normal"),
+    ],
+    "thoughtful1": [
+        (0.0, "normal"),
+        (0.1, "thoughtful"),
+        (0.5, "attentive"),
+        (0.85, "thoughtful"),
+        (1.0, "normal"),
+    ],
+    "thoughtful2": [
+        (0.0, "normal"),
+        (0.08, "thoughtful"),
+        (0.4, "curious"),
+        (0.75, "thoughtful"),
+        (1.0, "normal"),
+    ],
+    "attentive1": [
+        (0.0, "normal"),
+        (0.08, "attentive"),
+        (0.5, "understanding"),
+        (0.85, "attentive"),
+        (1.0, "normal"),
+    ],
+    "attentive2": [
+        (0.0, "normal"),
+        (0.1, "attentive"),
+        (0.5, "thoughtful"),
+        (0.85, "attentive"),
+        (1.0, "normal"),
+    ],
+    "understanding1": [
+        (0.0, "normal"),
+        (0.08, "understanding"),
+        (0.5, "attentive"),
+        (0.85, "understanding"),
+        (1.0, "normal"),
+    ],
+    "understanding2": [
+        (0.0, "normal"),
+        (0.1, "understanding"),
+        (0.5, "yes"),
+        (0.85, "understanding"),
+        (1.0, "normal"),
+    ],
+    "dance1": [
+        (0.0, "normal"),
+        (0.05, "dance"),
+        (0.3, "cheerful"),
+        (0.6, "dance"),
+        (0.85, "enthusiastic"),
+        (1.0, "normal"),
+    ],
+    "dance2": [
+        (0.0, "normal"),
+        (0.08, "cheerful"),
+        (0.35, "dance"),
+        (0.65, "laughing"),
+        (0.85, "cheerful"),
+        (1.0, "normal"),
+    ],
+    "dance3": [
+        (0.0, "normal"),
+        (0.05, "enthusiastic"),
+        (0.25, "dance"),
+        (0.5, "laughing"),
+        (0.75, "dance"),
+        (1.0, "normal"),
+    ],
+    "electric1": [
+        (0.0, "normal"),
+        (0.05, "electric"),
+        (0.3, "amazed"),
+        (0.6, "electric"),
+        (1.0, "normal"),
+    ],
+    "no1": [
+        (0.0, "normal"),
+        (0.08, "no"),
+        (0.5, "angry"),
+        (0.85, "no"),
+        (1.0, "normal"),
+    ],
+    "no_excited1": [
+        (0.0, "normal"),
+        (0.08, "no_excited"),
+        (0.4, "cheerful"),
+        (0.75, "no_excited"),
+        (1.0, "normal"),
+    ],
+    "no_sad1": [
+        (0.0, "normal"),
+        (0.1, "no_sad"),
+        (0.5, "sad"),
+        (0.85, "no_sad"),
+        (1.0, "normal"),
+    ],
+    "inquiring1": [
+        (0.0, "normal"),
+        (0.08, "inquiring"),
+        (0.5, "curious"),
+        (0.85, "inquiring"),
+        (1.0, "normal"),
+    ],
+    "inquiring2": [
+        (0.0, "normal"),
+        (0.1, "inquiring"),
+        (0.5, "thoughtful"),
+        (0.85, "inquiring"),
+        (1.0, "normal"),
+    ],
+    "inquiring3": [
+        (0.0, "normal"),
+        (0.08, "inquiring"),
+        (0.4, "curious"),
+        (0.75, "inquiring"),
+        (1.0, "normal"),
+    ],
+}
+
+# ============================================================
+# Dance scripts (relative time 0.0 → 1.0)
+# ============================================================
+
+DANCE_SCRIPTS = {
+    "groovy_sway_and_roll": [
+        (0.0, "normal"),
+        (0.05, "cheerful"),
+        (0.3, "dance"),
+        (0.6, "laughing"),
+        (0.85, "cheerful"),
+        (1.0, "normal"),
+    ],
+    "simple_nod": [
+        (0.0, "normal"),
+        (0.1, "yes"),
+        (0.5, "understanding"),
+        (0.85, "yes"),
+        (1.0, "normal"),
+    ],
+    "yeah_nod": [
+        (0.0, "normal"),
+        (0.08, "yes"),
+        (0.4, "success"),
+        (0.75, "enthusiastic"),
+        (1.0, "normal"),
+    ],
+    "uh_huh_tilt": [
+        (0.0, "normal"),
+        (0.1, "understanding"),
+        (0.5, "thoughtful"),
+        (0.85, "understanding"),
+        (1.0, "normal"),
+    ],
+    "side_to_side_sway": [
+        (0.0, "normal"),
+        (0.05, "happy"),
+        (0.3, "cheerful"),
+        (0.6, "happy"),
+        (0.85, "cheerful"),
+        (1.0, "normal"),
+    ],
+    "chicken_peck": [
+        (0.0, "normal"),
+        (0.08, "curious"),
+        (0.3, "attentive"),
+        (0.6, "curious"),
+        (0.85, "attentive"),
+        (1.0, "normal"),
+    ],
+    "dizzy_spin": [
+        (0.0, "normal"),
+        (0.05, "surprised"),
+        (0.25, "confused"),
+        (0.55, "amazed"),
+        (0.8, "confused"),
+        (1.0, "normal"),
+    ],
+    "grid_snap": [
+        (0.0, "normal"),
+        (0.08, "attentive"),
+        (0.4, "electric"),
+        (0.7, "attentive"),
+        (1.0, "normal"),
+    ],
+    "head_tilt_roll": [
+        (0.0, "normal"),
+        (0.05, "curious"),
+        (0.4, "thoughtful"),
+        (0.75, "curious"),
+        (1.0, "normal"),
+    ],
+    "interwoven_spirals": [
+        (0.0, "normal"),
+        (0.05, "dance"),
+        (0.3, "amazed"),
+        (0.6, "dance"),
+        (0.85, "cheerful"),
+        (1.0, "normal"),
+    ],
+    "jackson_square": [
+        (0.0, "normal"),
+        (0.05, "dance"),
+        (0.3, "enthusiastic"),
+        (0.6, "dance"),
+        (0.85, "cheerful"),
+        (1.0, "normal"),
+    ],
+    "neck_recoil": [
+        (0.0, "normal"),
+        (0.08, "surprised"),
+        (0.35, "fear"),
+        (0.7, "surprised"),
+        (1.0, "normal"),
+    ],
+    "pendulum_swing": [
+        (0.0, "normal"),
+        (0.1, "calming"),
+        (0.5, "serenity"),
+        (0.85, "calming"),
+        (1.0, "normal"),
+    ],
+    "polyrhythm_combo": [
+        (0.0, "normal"),
+        (0.05, "dance"),
+        (0.25, "cheerful"),
+        (0.5, "dance"),
+        (0.75, "enthusiastic"),
+        (1.0, "normal"),
+    ],
+    "sharp_side_tilt": [
+        (0.0, "normal"),
+        (0.08, "attentive"),
+        (0.4, "inquiring"),
+        (0.75, "attentive"),
+        (1.0, "normal"),
+    ],
+    "side_glance_flick": [
+        (0.0, "normal"),
+        (0.1, "curious"),
+        (0.5, "inquiring"),
+        (0.85, "curious"),
+        (1.0, "normal"),
+    ],
+    "side_peekaboo": [
+        (0.0, "normal"),
+        (0.08, "curious"),
+        (0.4, "oops"),
+        (0.75, "cheerful"),
+        (1.0, "normal"),
+    ],
+    "stumble_and_recover": [
+        (0.0, "normal"),
+        (0.05, "oops"),
+        (0.3, "confused"),
+        (0.6, "relief"),
+        (0.85, "cheerful"),
+        (1.0, "normal"),
+    ],
+    "chin_lead": [
+        (0.0, "normal"),
+        (0.08, "proud"),
+        (0.5, "dance"),
+        (0.85, "proud"),
+        (1.0, "normal"),
+    ],
+}
+
+
+def get_script(dataset_name: str, move_name: str) -> list:
+    """Get the eye expression script for a given dataset/move combination.
+
+    Args:
+        dataset_name: e.g. 'pollen-robotics/reachy-mini-emotions-library'
+        move_name: e.g. 'happy1'
+
+    Returns:
+        List of (relative_time, mood) tuples.
+    """
+    is_dance = "dances" in dataset_name.lower()
+    if is_dance:
+        return DANCE_SCRIPTS.get(move_name, _DEFAULT)
+
+    # Strip variant number for lookup in emotion scripts
+    base = move_name.rstrip("0123456789")
+    return EMOTION_SCRIPTS.get(move_name) or EMOTION_SCRIPTS.get(base) or _DEFAULT
