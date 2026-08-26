@@ -25,6 +25,10 @@ def restore_overlay_state() -> None:
         server._overlay_visibility.update(original)
 
 
+def test_asr_overlay_starts_hidden() -> None:
+    assert server._overlay_visibility == {"asr": False}
+
+
 def test_asr_overlay_state_is_returned_by_both_screen_channels() -> None:
     result = asyncio.run(
         server.set_overlay_visibility(

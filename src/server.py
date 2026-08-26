@@ -49,7 +49,9 @@ _pipeline_until = 0.0
 _diag_state: dict[str, Any] = {}
 _diag_until = 0.0
 _diag_seq = 0
-_overlay_visibility: dict[str, bool] = {"asr": True}
+# Diagnostic transcription is opt-in on the public-facing eye screen.  The
+# bounded overlay endpoint remains the sole runtime owner of this state.
+_overlay_visibility: dict[str, bool] = {"asr": False}
 _DIAG_FINAL_BACKLOG_CAPACITY = 64
 _DIAG_FINAL_SEEN_CAPACITY = 512
 _diag_final_backlog: deque[dict[str, Any]] = deque()
