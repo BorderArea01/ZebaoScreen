@@ -76,6 +76,7 @@ var pipelineEl=document.getElementById("pipelineOverlay");
 var intentEl=document.getElementById("intentOverlay");
 var pixelTextMessageId=null;
 var pixelTextContent="";
+var asrOverlayVisible=true;
 
 var HIDDEN_CURSOR='url("data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==") 0 0, none';
 function applyHiddenCursor(root){
@@ -499,8 +500,16 @@ function applyPipeline(d){
 var INTENT_LABELS={0:"忽略",1:"对话",2:"视觉",3:"身份",4:"任务",5:"本地动作",6:"控制",7:"转人工"};
 var CONTROL_LABELS={601:"暂停",602:"清空上下文"};
 var ASR_REASON_LABELS={startup:"启动中",wake_name_not_detected:"未叫泽宝，已拦截",wake_name_detected_waiting_physical:"检测到唤醒词，等待人声证据",wake_without_physical_evidence:"疑似唤醒词但无物理人声，已拦截",wake_physical_confirmed:"唤醒词与物理人声已确认，正在收音",turn_in_progress:"正在收音",passed_to_intent:"ASR final 已传入意图层",not_addressed_to_robot:"未明确叫机器人，已拦截",no_speech_evidence:"无可靠物理人声，已拦截",ambient_hallucination:"弱环境音幻听，已拦截",ambient_noise_hallucination:"环境音幻听，已拦截",empty_asr:"没有有效 final",wake_name_only:"仅唤醒，继续听",addressed_to_robot:"已叫泽宝，放行",same_source_continuation:"续聊放行"};
+function applyOverlayState(source){
+  var overlays=source&&source.overlays&&typeof source.overlays==="object"?source.overlays:null;
+  var asr=overlays&&overlays.asr&&typeof overlays.asr==="object"?overlays.asr:null;
+  if(!asr||typeof asr.visible!=="boolean")return;
+  asrOverlayVisible=asr.visible;
+  if(!asrOverlayVisible&&intentEl){intentEl.className="";intentEl.textContent="";}
+}
 function applyIntent(d){
   if(!intentEl)return;
+  if(!asrOverlayVisible){intentEl.className="";intentEl.textContent="";return;}
   var asr=d&&d.diag&&d.diag.asr?d.diag.asr:null;
   var intent=d&&d.diag&&d.diag.intent?d.diag.intent:null;
   if((!asr||typeof asr!=="object")&&(!intent||typeof intent!=="object")){intentEl.className="";intentEl.textContent="";return}
@@ -565,6 +574,7 @@ function applyDiagEnvelope(message){
   }else if(isFinite(seq)&&seq<=lastDiagSeq)return;
   if(isFinite(seq)&&seq>lastDiagSeq)lastDiagSeq=seq;
   var payload=message.payload;
+  applyOverlayState(payload);
   applyPipeline({pipeline:payload.pipeline||{}});
   applyIntent({diag:payload});
 }
@@ -604,6 +614,7 @@ function pollMood(){
   fetch("/api/mood").then(function(r){return r.json()}).then(function(d){
     moveActive=!!d.move_active;
     applyPixelText(d);
+    applyOverlayState(d);
     if(diagRestFallbackActive()){
       applyPipeline(d);
       applyIntent(d);

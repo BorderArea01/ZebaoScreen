@@ -19,7 +19,7 @@ from typing import Any
 
 import uvicorn
 from eye_scripts import get_script
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -49,6 +49,7 @@ _pipeline_until = 0.0
 _diag_state: dict[str, Any] = {}
 _diag_until = 0.0
 _diag_seq = 0
+_overlay_visibility: dict[str, bool] = {"asr": True}
 _DIAG_FINAL_BACKLOG_CAPACITY = 64
 _DIAG_FINAL_SEEN_CAPACITY = 512
 _diag_final_backlog: deque[dict[str, Any]] = deque()
@@ -79,6 +80,12 @@ class PixelTextRequest(BaseModel):
     streaming: bool = False
     final: bool = False
     duration_seconds: float = Field(default=8.0, ge=0.2, le=120.0)
+
+
+class OverlayVisibilityRequest(BaseModel):
+    """A bounded visibility change for one owned screen overlay."""
+
+    visible: bool
 
 
 class DiagRequest(BaseModel):
@@ -261,11 +268,20 @@ def _clear_expired_pixel_text_locked(now: float) -> None:
         _pixel_text_until = 0.0
 
 
+def _overlay_snapshot_locked() -> dict[str, dict[str, bool]]:
+    """Return UI-owned overlay state without exposing diagnostic payloads."""
+    return {
+        overlay_id: {"visible": bool(visible)}
+        for overlay_id, visible in _overlay_visibility.items()
+    }
+
+
 def _diag_envelope_locked(now: float) -> dict[str, Any]:
     diag = dict(_diag_state) if _diag_until > now else {}
     pipeline = dict(_pipeline_data) if _pipeline_until > now else {}
     payload = dict(diag)
     payload["pipeline"] = pipeline
+    payload["overlays"] = _overlay_snapshot_locked()
     return {"type": "diag.update", "seq": _diag_seq, "payload": payload}
 
 
@@ -372,6 +388,7 @@ async def get_mood():  # type: ignore[no-untyped-def]
             "speaking_remaining_seconds": speaking_remaining,
             "pipeline": _pipeline_data if _pipeline_until > now else {},
             "diag": _diag_state if _diag_until > now else {},
+            "overlays": _overlay_snapshot_locked(),
         }
 
 
@@ -624,6 +641,38 @@ async def clear_diag():  # type: ignore[no-untyped-def]
         envelope = _advance_diag_envelope_locked(time.monotonic())
     _broadcast_diag(envelope)
     return {"ok": True}
+
+
+@app.get("/api/overlays")
+async def get_overlays():  # type: ignore[no-untyped-def]
+    """Expose the small, user-configurable overlay state for local clients."""
+    with _lock:
+        return {"overlays": _overlay_snapshot_locked()}
+
+
+@app.post("/api/overlays/{overlay_id}")
+async def set_overlay_visibility(
+    overlay_id: str,
+    req: OverlayVisibilityRequest,
+):  # type: ignore[no-untyped-def]
+    """Set one known overlay directly; arbitrary screen DOM changes are rejected."""
+    normalized_id = str(overlay_id or "").strip().lower()
+    if normalized_id not in _overlay_visibility:
+        raise HTTPException(status_code=404, detail="overlay_not_found")
+    global _last_activity
+    now = time.monotonic()
+    with _lock:
+        _overlay_visibility[normalized_id] = bool(req.visible)
+        _last_activity = now
+        overlays = _overlay_snapshot_locked()
+        envelope = _advance_diag_envelope_locked(now)
+    _broadcast_diag(envelope)
+    return {
+        "ok": True,
+        "overlay_id": normalized_id,
+        "visible": overlays[normalized_id]["visible"],
+        "overlays": overlays,
+    }
 
 
 # --- Pipeline overlay ---
