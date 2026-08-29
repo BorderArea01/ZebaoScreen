@@ -445,6 +445,7 @@ function render(ts){
 }
 function setWebview(url){
   if(url){
+    if(pipelineEl){pipelineEl.className="";pipelineEl.innerHTML="";}
     c.style.display="none";wv.src=url;wv.style.display="block";wvActive=true;
   }else{
     wv.style.display="none";wv.src="";c.style.display="block";wvActive=false;
@@ -477,6 +478,7 @@ var PL_COLORS={asr:"#00e5ff",ack:"#7c4dff",interim:"#ff6ec7",intent:"#ffab00",ll
 function fmtPipelineMs(ms){if(ms>=10000)return(ms/1000).toFixed(1)+'s';if(ms>=1000)return(ms/1000).toFixed(2)+'s';return Math.round(ms)+'ms'}
 function applyPipeline(d){
   if(!pipelineEl)return;
+  if(wvActive){pipelineEl.className='';pipelineEl.innerHTML='';return}
   var p=d&&d.pipeline?d.pipeline:null;
   if(!p||!p.stages||typeof p.stages!=='object'||Object.keys(p.stages).length===0){pipelineEl.className='';pipelineEl.innerHTML='';return}
   var total=p.total_ms||0;

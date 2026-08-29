@@ -69,3 +69,10 @@ def test_eyes_page_applies_overlay_state_for_ws_and_poll_recovery() -> None:
     assert "applyOverlayState(payload);" in page
     assert "applyOverlayState(d);" in page
     assert "if(!asrOverlayVisible)" in page
+
+
+def test_webview_hides_engineering_pipeline_overlay() -> None:
+    page = (SOURCE_ROOT / "pages" / "eyes_live2d.html").read_text(encoding="utf-8")
+
+    assert 'if(pipelineEl){pipelineEl.className="";pipelineEl.innerHTML="";}' in page
+    assert "if(wvActive){pipelineEl.className='';pipelineEl.innerHTML='';return}" in page
