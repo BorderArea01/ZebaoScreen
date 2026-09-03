@@ -72,16 +72,27 @@ _lock = threading.Lock()
 # through a loopback-only endpoint after the card becomes visible.
 _PHONE_PAIRING_ENDPOINT = os.getenv(
     "ZEBAO_PHONE_PAIRING_ENDPOINT",
-    "http://127.0.0.1:7862/api/v1/phone-voice/pairing",
+    "http://127.0.0.1:7862/api/v1/phone-voice/pairing?audience=showroom",
 ).strip()
 _PHONE_PAIRING_FETCH_TIMEOUT_SECONDS = 2.5
 _PHONE_PAIRING_MAX_SVG_CHARS = 96_000
 _PHONE_PAIRING_DEFAULT_DURATION_SECONDS = 120.0
+_PHONE_PAIRING_REFRESH_MARGIN_SECONDS = 60.0
+_PHONE_PAIRING_FALLBACK_REFRESH_SECONDS = 15 * 60.0
+_PHONE_PAIR_DEFAULT_VISIBLE = os.getenv(
+    "ZEBAO_PHONE_PAIR_DEFAULT_VISIBLE",
+    "1",
+).strip().casefold() not in {"0", "false", "no", "off"}
 _phone_pair = {
-    "visible": False,
+    # The robot microphone is not reliable enough to be the only public
+    # input. Keep the phone entrance visible by default; it remains an
+    # overlay owned by this screen service, never an arbitrary web page.
+    "visible": _PHONE_PAIR_DEFAULT_VISIBLE,
     "qr_svg": "",
     "message": "",
+    "persistent": _PHONE_PAIR_DEFAULT_VISIBLE,
     "expires_at": 0.0,
+    "refresh_at": 0.0,
     "updated_at": 0.0,
 }
 
@@ -116,9 +127,10 @@ class OverlayVisibilityRequest(BaseModel):
 
 
 class PhonePairVisibilityRequest(BaseModel):
-    """Show or hide the local, bounded phone QR card."""
+    """Show or hide the locally owned phone QR card."""
 
     visible: bool
+    persistent: bool = False
     duration_seconds: float = Field(
         default=_PHONE_PAIRING_DEFAULT_DURATION_SECONDS,
         ge=10.0,
@@ -323,13 +335,19 @@ def _is_loopback_client(host: object) -> bool:
 
 
 def _clear_expired_phone_pair_locked(now: float) -> None:
-    if bool(_phone_pair["visible"]) and float(_phone_pair["expires_at"]) <= now:
+    if (
+        bool(_phone_pair["visible"])
+        and not bool(_phone_pair.get("persistent"))
+        and float(_phone_pair["expires_at"]) <= now
+    ):
         _phone_pair.update(
             {
                 "visible": False,
                 "qr_svg": "",
                 "message": "",
+                "persistent": False,
                 "expires_at": 0.0,
+                "refresh_at": 0.0,
                 "updated_at": now,
             }
         )
@@ -339,17 +357,20 @@ def _phone_pair_public_state_locked(now: float) -> dict[str, object]:
     """Return only non-sensitive QR-card state to normal screen snapshots."""
     _clear_expired_phone_pair_locked(now)
     visible = bool(_phone_pair["visible"])
+    persistent = bool(_phone_pair.get("persistent"))
     return {
         "visible": visible,
-        "remaining_seconds": round(
-            max(0.0, float(_phone_pair["expires_at"]) - now) if visible else 0.0,
-            1,
+        "persistent": persistent,
+        "remaining_seconds": (
+            None
+            if visible and persistent
+            else round(max(0.0, float(_phone_pair["expires_at"]) - now) if visible else 0.0, 1)
         ),
         "updated_at": float(_phone_pair["updated_at"]),
     }
 
 
-def _validate_phone_pairing_payload(payload: object) -> tuple[str, str]:
+def _validate_phone_pairing_payload(payload: object) -> tuple[str, str, float]:
     """Accept only a locally generated QR SVG and a compact display message."""
     if not isinstance(payload, dict) or not bool(payload.get("ok")):
         raise ValueError("phone_pairing_unavailable")
@@ -372,10 +393,18 @@ def _validate_phone_pairing_payload(payload: object) -> tuple[str, str]:
     message = "扫码，按住说话"
     if not bool(payload.get("secure_transport")):
         message = "二维码需要安全连接"
-    return svg, message
+    try:
+        invitation_seconds = float(payload.get("pairing_expires_in_seconds"))
+    except (TypeError, ValueError):
+        invitation_seconds = _PHONE_PAIRING_FALLBACK_REFRESH_SECONDS
+    if invitation_seconds <= _PHONE_PAIRING_REFRESH_MARGIN_SECONDS:
+        refresh_after_seconds = max(10.0, invitation_seconds / 2.0)
+    else:
+        refresh_after_seconds = invitation_seconds - _PHONE_PAIRING_REFRESH_MARGIN_SECONDS
+    return svg, message, max(10.0, refresh_after_seconds)
 
 
-def _fetch_local_phone_pairing() -> tuple[str, str]:
+def _fetch_local_phone_pairing() -> tuple[str, str, float]:
     """Fetch a QR only from the co-located Zebao App, never from the LAN."""
     endpoint = _PHONE_PAIRING_ENDPOINT
     parsed = urlsplit(endpoint)
@@ -814,7 +843,9 @@ async def set_phone_pair_visibility(
     now = time.monotonic()
     if req.visible:
         try:
-            qr_svg, message = await asyncio.to_thread(_fetch_local_phone_pairing)
+            qr_svg, message, refresh_after_seconds = await asyncio.to_thread(
+                _fetch_local_phone_pairing
+            )
         except ValueError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         with _lock:
@@ -823,7 +854,9 @@ async def set_phone_pair_visibility(
                     "visible": True,
                     "qr_svg": qr_svg,
                     "message": message,
-                    "expires_at": now + float(req.duration_seconds),
+                    "persistent": bool(req.persistent),
+                    "expires_at": 0.0 if req.persistent else now + float(req.duration_seconds),
+                    "refresh_at": now + refresh_after_seconds,
                     "updated_at": now,
                 }
             )
@@ -835,7 +868,9 @@ async def set_phone_pair_visibility(
                     "visible": False,
                     "qr_svg": "",
                     "message": "",
+                    "persistent": False,
                     "expires_at": 0.0,
+                    "refresh_at": 0.0,
                     "updated_at": now,
                 }
             )
@@ -852,11 +887,54 @@ async def get_phone_pair(request: Request) -> dict[str, object]:
     now = time.monotonic()
     with _lock:
         state = _phone_pair_public_state_locked(now)
+        refresh_due = bool(
+            state["visible"]
+            and bool(_phone_pair.get("persistent"))
+            and (
+                not str(_phone_pair["qr_svg"] or "")
+                or float(_phone_pair.get("refresh_at") or 0.0) <= now
+            )
+        )
+    if refresh_due:
+        try:
+            qr_svg, message, refresh_after_seconds = await asyncio.to_thread(
+                _fetch_local_phone_pairing
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        with _lock:
+            # Do not resurrect a card that a local operator deliberately hid
+            # while the local fetch was in flight.
+            if bool(_phone_pair["visible"]):
+                _phone_pair.update(
+                    {
+                        "qr_svg": qr_svg,
+                        "message": message,
+                        "refresh_at": now + refresh_after_seconds,
+                        "updated_at": now,
+                    }
+                )
+
+    with _lock:
+        current = time.monotonic()
+        state = _phone_pair_public_state_locked(current)
         qr_svg = str(_phone_pair["qr_svg"] or "") if bool(state["visible"]) else ""
         message = str(_phone_pair["message"] or "") if qr_svg else ""
+        refresh_at = float(_phone_pair.get("refresh_at") or 0.0)
+        refresh_after_seconds = (
+            max(10.0, round(refresh_at - current, 1))
+            if bool(state["persistent"]) and refresh_at > 0.0
+            else None
+        )
     if not qr_svg:
         raise HTTPException(status_code=404, detail="phone_pair_unavailable")
-    return {"ok": True, "qr_svg": qr_svg, "message": message, "phone_pair": state}
+    return {
+        "ok": True,
+        "qr_svg": qr_svg,
+        "message": message,
+        "phone_pair": state,
+        "refresh_after_seconds": refresh_after_seconds,
+    }
 
 
 # --- Pipeline overlay ---

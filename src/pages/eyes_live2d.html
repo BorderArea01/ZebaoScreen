@@ -96,6 +96,8 @@ var asrOverlayVisible=false;
 var phonePairVisible=false;
 var phonePairLoaded=false;
 var phonePairFetchInFlight=false;
+var phonePairRetryAt=0;
+var phonePairRefreshTimer=null;
 
 var HIDDEN_CURSOR='url("data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==") 0 0, none';
 function applyHiddenCursor(root){
@@ -469,7 +471,6 @@ function render(ts){
 function setWebview(url){
   if(url){
     if(pipelineEl){pipelineEl.className="";pipelineEl.innerHTML="";}
-    setPhonePairVisual(false);
     c.style.display="none";wv.src=url;wv.style.display="block";wvActive=true;
   }else{
     wv.style.display="none";wv.src="";c.style.display="block";wvActive=false;
@@ -503,10 +504,23 @@ function setPhonePairVisual(visible){
   if(!phonePairVisible&&phonePairQrEl){
     phonePairQrEl.removeAttribute("src");
     phonePairLoaded=false;
+    phonePairRetryAt=0;
+    if(phonePairRefreshTimer){clearTimeout(phonePairRefreshTimer);phonePairRefreshTimer=null;}
   }
 }
+function schedulePhonePairRefresh(seconds){
+  if(phonePairRefreshTimer){clearTimeout(phonePairRefreshTimer);phonePairRefreshTimer=null;}
+  var delay=Math.max(10000,Number(seconds||0)*1000);
+  if(!isFinite(delay)||delay<=0)return;
+  phonePairRefreshTimer=setTimeout(function(){
+    phonePairRefreshTimer=null;
+    phonePairLoaded=false;
+    phonePairRetryAt=0;
+    loadPhonePair();
+  },delay);
+}
 async function loadPhonePair(){
-  if(phonePairLoaded||phonePairFetchInFlight||!phonePairVisible||wvActive)return;
+  if(phonePairLoaded||phonePairFetchInFlight||!phonePairVisible||Date.now()<phonePairRetryAt)return;
   phonePairFetchInFlight=true;
   try{
     var response=await fetch("/api/phone-pair",{cache:"no-store"});
@@ -515,15 +529,18 @@ async function loadPhonePair(){
     if(phonePairQrEl)phonePairQrEl.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(String(payload.qr_svg));
     if(phonePairHintEl)phonePairHintEl.textContent=String(payload.message||"按住说话，松开即发送");
     phonePairLoaded=true;
+    schedulePhonePairRefresh(payload.refresh_after_seconds);
   }catch(e){
     if(phonePairHintEl)phonePairHintEl.textContent="二维码暂不可用，请稍后重试";
+    phonePairRetryAt=Date.now()+3000;
+    schedulePhonePairRefresh(3);
   }finally{
     phonePairFetchInFlight=false;
   }
 }
 function applyPhonePairState(source){
   var pair=source&&source.phone_pair&&typeof source.phone_pair==="object"?source.phone_pair:null;
-  var visible=!!(pair&&pair.visible)&&!wvActive;
+  var visible=!!(pair&&pair.visible);
   if(visible!==phonePairVisible)setPhonePairVisual(visible);
   if(visible)loadPhonePair();
 }

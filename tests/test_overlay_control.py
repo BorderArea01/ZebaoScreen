@@ -4,6 +4,7 @@ import asyncio
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -88,7 +89,9 @@ def test_phone_pair_payload_never_leaks_through_the_general_mood_snapshot() -> N
                 "visible": True,
                 "qr_svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>",
                 "message": "扫码，按住说话",
+                "persistent": False,
                 "expires_at": time.monotonic() + 30.0,
+                "refresh_at": 0.0,
                 "updated_at": time.monotonic(),
             }
         )
@@ -100,8 +103,48 @@ def test_phone_pair_payload_never_leaks_through_the_general_mood_snapshot() -> N
     assert "扫码" not in str(mood)
 
 
+def test_phone_pair_defaults_to_a_persistent_public_entry() -> None:
+    with server._lock:
+        state = server._phone_pair_public_state_locked(time.monotonic())
+
+    assert state["visible"] is True
+    assert state["persistent"] is True
+    assert state["remaining_seconds"] is None
+
+
+def test_persistent_phone_pair_refreshes_its_local_qr_without_leaking_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with server._lock:
+        server._phone_pair.update(
+            {
+                "visible": True,
+                "qr_svg": "",
+                "message": "",
+                "persistent": True,
+                "expires_at": 0.0,
+                "refresh_at": 0.0,
+                "updated_at": time.monotonic(),
+            }
+        )
+    monkeypatch.setattr(
+        server,
+        "_fetch_local_phone_pairing",
+        lambda: ("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>", "扫码，按住说话", 90.0),
+    )
+    request = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"))
+
+    result = asyncio.run(server.get_phone_pair(request))
+    mood = asyncio.run(server.get_mood())
+
+    assert result["ok"] is True
+    assert result["refresh_after_seconds"] is not None
+    assert mood["phone_pair"]["visible"] is True
+    assert "qr_svg" not in mood["phone_pair"]
+
+
 def test_phone_pair_validator_accepts_only_a_bounded_plain_svg() -> None:
-    svg, message = server._validate_phone_pairing_payload(
+    svg, message, refresh_after_seconds = server._validate_phone_pairing_payload(
         {
             "ok": True,
             "secure_transport": True,
@@ -111,7 +154,8 @@ def test_phone_pair_validator_accepts_only_a_bounded_plain_svg() -> None:
 
     assert svg.startswith("<svg")
     assert message == "扫码，按住说话"
-    xml_svg, _ = server._validate_phone_pairing_payload(
+    assert refresh_after_seconds > 0
+    xml_svg, _, _ = server._validate_phone_pairing_payload(
         {
             "ok": True,
             "secure_transport": True,
@@ -135,3 +179,5 @@ def test_eyes_page_uses_a_non_webview_phone_pair_overlay() -> None:
     assert "function currentEyeLayout()" in page
     assert 'fetch("/api/phone-pair"' in page
     assert "body.phone-pair-active" in page
+    assert "schedulePhonePairRefresh" in page
+    assert "var visible=!!(pair&&pair.visible);" in page
