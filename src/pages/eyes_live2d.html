@@ -98,6 +98,7 @@ var phonePairLoaded=false;
 var phonePairFetchInFlight=false;
 var phonePairRetryAt=0;
 var phonePairRefreshTimer=null;
+var phonePairUpdatedAt=null;
 
 var HIDDEN_CURSOR='url("data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==") 0 0, none';
 function applyHiddenCursor(root){
@@ -505,6 +506,7 @@ function setPhonePairVisual(visible){
     phonePairQrEl.removeAttribute("src");
     phonePairLoaded=false;
     phonePairRetryAt=0;
+    phonePairUpdatedAt=null;
     if(phonePairRefreshTimer){clearTimeout(phonePairRefreshTimer);phonePairRefreshTimer=null;}
   }
 }
@@ -541,7 +543,14 @@ async function loadPhonePair(){
 function applyPhonePairState(source){
   var pair=source&&source.phone_pair&&typeof source.phone_pair==="object"?source.phone_pair:null;
   var visible=!!(pair&&pair.visible);
+  var updatedAt=pair&&pair.updated_at!=null?String(pair.updated_at):"";
   if(visible!==phonePairVisible)setPhonePairVisual(visible);
+  if(visible&&updatedAt&&updatedAt!==phonePairUpdatedAt){
+    phonePairUpdatedAt=updatedAt;
+    phonePairLoaded=false;
+    phonePairRetryAt=0;
+    if(phonePairQrEl)phonePairQrEl.removeAttribute("src");
+  }
   if(visible)loadPhonePair();
 }
 var PL_LABELS={asr:"ASR",ack:"ACK",intent:"意图",llm:"LLM",tts:"TTS",screen:"屏",interim:"过渡",playback:"播放"};

@@ -181,3 +181,4 @@ def test_eyes_page_uses_a_non_webview_phone_pair_overlay() -> None:
     assert "body.phone-pair-active" in page
     assert "schedulePhonePairRefresh" in page
     assert "var visible=!!(pair&&pair.visible);" in page
+    assert "phonePairUpdatedAt" in page
