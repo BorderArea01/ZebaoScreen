@@ -15,11 +15,16 @@ import os
 import threading
 import time
 from collections import deque
+from ipaddress import ip_address
 from typing import Any
+from urllib.error import URLError
+from urllib.parse import urlsplit
+from urllib.request import Request as UrlRequest
+from urllib.request import urlopen
 
 import uvicorn
 from eye_scripts import get_script
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -60,6 +65,26 @@ _diag_final_seen_ids: set[str] = set()
 _last_activity = time.monotonic()
 _lock = threading.Lock()
 
+# The phone-pair card is a deliberately narrow, local-only overlay. It keeps
+# the eye canvas alive rather than swapping the kiosk into the phone web page.
+# Its QR payload is never included in /api/mood or the diagnostic websocket:
+# those endpoints are observable on the LAN, while the kiosk fetches the SVG
+# through a loopback-only endpoint after the card becomes visible.
+_PHONE_PAIRING_ENDPOINT = os.getenv(
+    "ZEBAO_PHONE_PAIRING_ENDPOINT",
+    "http://127.0.0.1:7862/api/v1/phone-voice/pairing",
+).strip()
+_PHONE_PAIRING_FETCH_TIMEOUT_SECONDS = 2.5
+_PHONE_PAIRING_MAX_SVG_CHARS = 96_000
+_PHONE_PAIRING_DEFAULT_DURATION_SECONDS = 120.0
+_phone_pair = {
+    "visible": False,
+    "qr_svg": "",
+    "message": "",
+    "expires_at": 0.0,
+    "updated_at": 0.0,
+}
+
 
 class _DiagSubscriber:
     """Keep reliable finals separate from coalesced live snapshots."""
@@ -88,6 +113,17 @@ class OverlayVisibilityRequest(BaseModel):
     """A bounded visibility change for one owned screen overlay."""
 
     visible: bool
+
+
+class PhonePairVisibilityRequest(BaseModel):
+    """Show or hide the local, bounded phone QR card."""
+
+    visible: bool
+    duration_seconds: float = Field(
+        default=_PHONE_PAIRING_DEFAULT_DURATION_SECONDS,
+        ge=10.0,
+        le=300.0,
+    )
 
 
 class DiagRequest(BaseModel):
@@ -278,6 +314,89 @@ def _overlay_snapshot_locked() -> dict[str, dict[str, bool]]:
     }
 
 
+def _is_loopback_client(host: object) -> bool:
+    """Accept sensitive screen-card requests only from the local kiosk/App."""
+    try:
+        return bool(ip_address(str(host or "").strip()).is_loopback)
+    except ValueError:
+        return False
+
+
+def _clear_expired_phone_pair_locked(now: float) -> None:
+    if bool(_phone_pair["visible"]) and float(_phone_pair["expires_at"]) <= now:
+        _phone_pair.update(
+            {
+                "visible": False,
+                "qr_svg": "",
+                "message": "",
+                "expires_at": 0.0,
+                "updated_at": now,
+            }
+        )
+
+
+def _phone_pair_public_state_locked(now: float) -> dict[str, object]:
+    """Return only non-sensitive QR-card state to normal screen snapshots."""
+    _clear_expired_phone_pair_locked(now)
+    visible = bool(_phone_pair["visible"])
+    return {
+        "visible": visible,
+        "remaining_seconds": round(
+            max(0.0, float(_phone_pair["expires_at"]) - now) if visible else 0.0,
+            1,
+        ),
+        "updated_at": float(_phone_pair["updated_at"]),
+    }
+
+
+def _validate_phone_pairing_payload(payload: object) -> tuple[str, str]:
+    """Accept only a locally generated QR SVG and a compact display message."""
+    if not isinstance(payload, dict) or not bool(payload.get("ok")):
+        raise ValueError("phone_pairing_unavailable")
+    raw_svg = payload.get("qr_svg")
+    svg = str(raw_svg or "").strip()
+    svg_root = svg
+    if svg_root.startswith("<?xml"):
+        declaration_end = svg_root.find("?>")
+        if declaration_end < 0:
+            raise ValueError("phone_pairing_qr_invalid")
+        svg_root = svg_root[declaration_end + 2 :].lstrip()
+    lowered_svg = svg.lower()
+    if (
+        not svg_root.startswith("<svg")
+        or len(svg) > _PHONE_PAIRING_MAX_SVG_CHARS
+        or "<script" in lowered_svg
+        or "onload=" in lowered_svg
+    ):
+        raise ValueError("phone_pairing_qr_invalid")
+    message = "扫码，按住说话"
+    if not bool(payload.get("secure_transport")):
+        message = "二维码需要安全连接"
+    return svg, message
+
+
+def _fetch_local_phone_pairing() -> tuple[str, str]:
+    """Fetch a QR only from the co-located Zebao App, never from the LAN."""
+    endpoint = _PHONE_PAIRING_ENDPOINT
+    parsed = urlsplit(endpoint)
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname not in {"127.0.0.1", "::1", "localhost"}
+    ):
+        raise ValueError("phone_pairing_endpoint_not_local")
+    request = UrlRequest(endpoint, headers={"Accept": "application/json"})
+    try:
+        with urlopen(request, timeout=_PHONE_PAIRING_FETCH_TIMEOUT_SECONDS) as response:
+            raw = response.read(_PHONE_PAIRING_MAX_SVG_CHARS + 8_192)
+    except (OSError, URLError) as exc:
+        raise ValueError("phone_pairing_fetch_failed") from exc
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("phone_pairing_response_invalid") from exc
+    return _validate_phone_pairing_payload(payload)
+
+
 def _diag_envelope_locked(now: float) -> dict[str, Any]:
     diag = dict(_diag_state) if _diag_until > now else {}
     pipeline = dict(_pipeline_data) if _pipeline_until > now else {}
@@ -391,6 +510,7 @@ async def get_mood():  # type: ignore[no-untyped-def]
             "pipeline": _pipeline_data if _pipeline_until > now else {},
             "diag": _diag_state if _diag_until > now else {},
             "overlays": _overlay_snapshot_locked(),
+            "phone_pair": _phone_pair_public_state_locked(now),
         }
 
 
@@ -675,6 +795,68 @@ async def set_overlay_visibility(
         "visible": overlays[normalized_id]["visible"],
         "overlays": overlays,
     }
+
+
+@app.post("/api/phone-pair")
+async def set_phone_pair_visibility(
+    req: PhonePairVisibilityRequest,
+    request: Request,
+) -> dict[str, object]:
+    """Show the QR card without turning the kiosk into a webview.
+
+    Only the co-located App may request the card. The screen server obtains the
+    QR itself from the local App so a caller cannot inject arbitrary SVG or an
+    off-device URL into the kiosk.
+    """
+    remote_host = request.client.host if request.client is not None else ""
+    if not _is_loopback_client(remote_host):
+        raise HTTPException(status_code=403, detail="phone_pair_local_only")
+    now = time.monotonic()
+    if req.visible:
+        try:
+            qr_svg, message = await asyncio.to_thread(_fetch_local_phone_pairing)
+        except ValueError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        with _lock:
+            _phone_pair.update(
+                {
+                    "visible": True,
+                    "qr_svg": qr_svg,
+                    "message": message,
+                    "expires_at": now + float(req.duration_seconds),
+                    "updated_at": now,
+                }
+            )
+            state = _phone_pair_public_state_locked(now)
+    else:
+        with _lock:
+            _phone_pair.update(
+                {
+                    "visible": False,
+                    "qr_svg": "",
+                    "message": "",
+                    "expires_at": 0.0,
+                    "updated_at": now,
+                }
+            )
+            state = _phone_pair_public_state_locked(now)
+    return {"ok": True, "phone_pair": state}
+
+
+@app.get("/api/phone-pair")
+async def get_phone_pair(request: Request) -> dict[str, object]:
+    """Return the QR SVG to the local Chromium kiosk only."""
+    remote_host = request.client.host if request.client is not None else ""
+    if not _is_loopback_client(remote_host):
+        raise HTTPException(status_code=403, detail="phone_pair_local_only")
+    now = time.monotonic()
+    with _lock:
+        state = _phone_pair_public_state_locked(now)
+        qr_svg = str(_phone_pair["qr_svg"] or "") if bool(state["visible"]) else ""
+        message = str(_phone_pair["message"] or "") if qr_svg else ""
+    if not qr_svg:
+        raise HTTPException(status_code=404, detail="phone_pair_unavailable")
+    return {"ok": True, "qr_svg": qr_svg, "message": message, "phone_pair": state}
 
 
 # --- Pipeline overlay ---

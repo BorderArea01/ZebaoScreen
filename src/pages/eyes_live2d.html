@@ -22,6 +22,14 @@ iframe{display:none;position:absolute;top:0;left:0;width:100%;height:100%;border
 #pixelText:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(180deg,rgba(255,255,255,.08) 0,rgba(255,255,255,.08) 1px,transparent 1px,transparent 6px);opacity:.24;pointer-events:none}
 #pixelText.streaming:after{content:"▌";display:inline-block;margin-left:4px;animation:pixelBlink .8s steps(2,end) infinite}
 @keyframes pixelBlink{50%{opacity:.12}}
+#phonePair{position:fixed;top:32px;right:22px;z-index:34;width:258px;padding:14px 14px 13px;border:1px solid rgba(244,180,95,.62);border-radius:22px;background:linear-gradient(155deg,rgba(52,35,19,.96),rgba(18,14,11,.94));box-shadow:0 18px 44px rgba(0,0,0,.48),inset 0 1px rgba(255,255,255,.09);color:#f7efe5;opacity:0;transform:translateX(20px) scale(.96);pointer-events:none;transition:opacity 160ms ease,transform 160ms ease}
+#phonePair.on{opacity:1;transform:none}
+#phonePair .pairTop{display:flex;align-items:center;gap:8px;color:#f4b45f;font:700 12px/1 "WenQuanYi Micro Hei","Microsoft YaHei",sans-serif;letter-spacing:.13em}
+#phonePair .pairDot{width:7px;height:7px;border-radius:50%;background:#f4b45f;box-shadow:0 0 12px rgba(244,180,95,.72)}
+#phonePair .pairQr{display:block;width:202px;height:202px;margin:12px auto 11px;padding:10px;border-radius:16px;background:#fff;box-shadow:0 8px 22px rgba(0,0,0,.28)}
+#phonePair .pairTitle{font:700 18px/1.2 "WenQuanYi Micro Hei","Microsoft YaHei",sans-serif;letter-spacing:-.025em;text-align:center}
+#phonePair .pairHint{margin-top:5px;color:rgba(247,239,229,.68);font:12px/1.35 "WenQuanYi Micro Hei","Microsoft YaHei",sans-serif;text-align:center}
+body.phone-pair-active #pixelText,body.phone-pair-active #pipelineOverlay,body.phone-pair-active #intentOverlay{display:none!important}
 #pipelineOverlay{position:fixed;top:4px;left:4px;z-index:25;pointer-events:none;display:none;opacity:0;transition:opacity .4s ease}
 #pipelineOverlay.on{display:block;opacity:1}
 #intentOverlay{position:fixed;left:8px;right:8px;bottom:10px;z-index:26;display:none;padding:7px 9px;border:1px solid rgba(108,224,255,.46);border-radius:4px;background:rgba(0,10,18,.82);color:rgba(214,246,255,.92);font:11px/1.35 "WenQuanYi Micro Hei","Microsoft YaHei",sans-serif;letter-spacing:.2px;pointer-events:none;transition:bottom .18s ease}
@@ -47,6 +55,12 @@ iframe{display:none;position:absolute;top:0;left:0;width:100%;height:100%;border
 <body>
 <canvas id="c"></canvas>
 <iframe id="wv"></iframe>
+<aside id="phonePair" aria-live="polite" aria-label="手机语音二维码">
+  <div class="pairTop"><i class="pairDot" aria-hidden="true"></i>手机语音</div>
+  <img class="pairQr" id="phonePairQr" alt="扫码用手机向泽宝说话">
+  <div class="pairTitle">扫码，说给泽宝</div>
+  <div class="pairHint" id="phonePairHint">按住说话，松开即发送</div>
+</aside>
 <div id="btns"></div>
 <div id="moodLabel"></div>
 <div id="pixelText" aria-live="polite"></div>
@@ -74,9 +88,15 @@ var lbl=document.getElementById("moodLabel");
 var pixelTextEl=document.getElementById("pixelText");
 var pipelineEl=document.getElementById("pipelineOverlay");
 var intentEl=document.getElementById("intentOverlay");
+var phonePairEl=document.getElementById("phonePair");
+var phonePairQrEl=document.getElementById("phonePairQr");
+var phonePairHintEl=document.getElementById("phonePairHint");
 var pixelTextMessageId=null;
 var pixelTextContent="";
 var asrOverlayVisible=false;
+var phonePairVisible=false;
+var phonePairLoaded=false;
+var phonePairFetchInFlight=false;
 
 var HIDDEN_CURSOR='url("data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==") 0 0, none';
 function applyHiddenCursor(root){
@@ -380,19 +400,26 @@ function fillMorphedBlob(a,b,p){
   ctx.fillStyle="#f8faf9";
   ctx.fill();
 }
+function currentEyeLayout(){
+  if(phonePairVisible){
+    return {leftX:132,rightX:352,mouthX:242,scale:.74};
+  }
+  return {leftX:220,rightX:580,mouthX:400,scale:1};
+}
 function drawMorphedExpression(fromFace,toFace,p){
   var from=faceSpec(fromFace), to=faceSpec(toFace);
   var breath=Math.sin(time*0.0022)*2.2;
   var p2=ease(clamp01(p));
   var s=interpSpec(from,to,p2);
+  var layout=currentEyeLayout();
   var allowAutoBlink=fromFace==="default"&&toFace==="default";
   var leftBlink=allowAutoBlink ? autoBlink("default",0) : 1;
   var rightBlink=allowAutoBlink ? autoBlink("default",0) : 1;
-  var lx=220, rx=580, ey=s.eyeY+breath;
-  drawMorphEye(lx,ey,eyeSize(s.eyeW),eyeSize(s.eyeH)*leftBlink,from.eye,to.eye,{hole:s.hole,lookX:s.leftLookX,lookY:s.lookY,pupilW:s.pupilW,pupilH:s.pupilH},"left",p2);
-  drawMorphEye(rx,ey,eyeSize(s.eyeW),eyeSize(s.eyeH)*rightBlink,from.eye,to.eye,{hole:s.hole,lookX:s.rightLookX,lookY:s.lookY,pupilW:s.pupilW,pupilH:s.pupilH},"right",p2);
-  var ma={kind:from.mouth,x:400,y:from.mouthY+breath,w:from.mouthW,h:from.mouthH};
-  var mb={kind:to.mouth,x:400,y:to.mouthY+breath,w:to.mouthW,h:to.mouthH};
+  var lx=layout.leftX, rx=layout.rightX, ey=s.eyeY+breath;
+  drawMorphEye(lx,ey,eyeSize(s.eyeW)*layout.scale,eyeSize(s.eyeH)*leftBlink*layout.scale,from.eye,to.eye,{hole:s.hole,lookX:s.leftLookX,lookY:s.lookY,pupilW:s.pupilW,pupilH:s.pupilH},"left",p2);
+  drawMorphEye(rx,ey,eyeSize(s.eyeW)*layout.scale,eyeSize(s.eyeH)*rightBlink*layout.scale,from.eye,to.eye,{hole:s.hole,lookX:s.rightLookX,lookY:s.lookY,pupilW:s.pupilW,pupilH:s.pupilH},"right",p2);
+  var ma={kind:from.mouth,x:layout.mouthX,y:from.mouthY+breath,w:from.mouthW*layout.scale,h:from.mouthH*layout.scale};
+  var mb={kind:to.mouth,x:layout.mouthX,y:to.mouthY+breath,w:to.mouthW*layout.scale,h:to.mouthH*layout.scale};
   if(performance.now()<speakingUntilMs){
     var t=performance.now()*0.001;
     mb.kind="cup";mb.h+=10+8*Math.abs(Math.sin(t*18));
@@ -446,6 +473,7 @@ function render(ts){
 function setWebview(url){
   if(url){
     if(pipelineEl){pipelineEl.className="";pipelineEl.innerHTML="";}
+    setPhonePairVisual(false);
     c.style.display="none";wv.src=url;wv.style.display="block";wvActive=true;
   }else{
     wv.style.display="none";wv.src="";c.style.display="block";wvActive=false;
@@ -472,13 +500,44 @@ function applyPixelText(data){
   }
   pixelTextEl.className=streaming?"on streaming":"on";
 }
+function setPhonePairVisual(visible){
+  phonePairVisible=!!visible;
+  if(phonePairEl)phonePairEl.className=phonePairVisible?"on":"";
+  document.body.classList.toggle("phone-pair-active",phonePairVisible);
+  if(!phonePairVisible&&phonePairQrEl){
+    phonePairQrEl.removeAttribute("src");
+    phonePairLoaded=false;
+  }
+}
+async function loadPhonePair(){
+  if(phonePairLoaded||phonePairFetchInFlight||!phonePairVisible||wvActive)return;
+  phonePairFetchInFlight=true;
+  try{
+    var response=await fetch("/api/phone-pair",{cache:"no-store"});
+    var payload=await response.json();
+    if(!response.ok||!payload||!payload.ok||!payload.qr_svg)throw new Error("pairing unavailable");
+    if(phonePairQrEl)phonePairQrEl.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(String(payload.qr_svg));
+    if(phonePairHintEl)phonePairHintEl.textContent=String(payload.message||"按住说话，松开即发送");
+    phonePairLoaded=true;
+  }catch(e){
+    if(phonePairHintEl)phonePairHintEl.textContent="二维码暂不可用，请稍后重试";
+  }finally{
+    phonePairFetchInFlight=false;
+  }
+}
+function applyPhonePairState(source){
+  var pair=source&&source.phone_pair&&typeof source.phone_pair==="object"?source.phone_pair:null;
+  var visible=!!(pair&&pair.visible)&&!wvActive;
+  if(visible!==phonePairVisible)setPhonePairVisual(visible);
+  if(visible)loadPhonePair();
+}
 var PL_LABELS={asr:"ASR",ack:"ACK",intent:"意图",llm:"LLM",tts:"TTS",screen:"屏",interim:"过渡",playback:"播放"};
 var PL_ORDER=["asr","ack","interim","intent","llm","tts","playback","screen"];
 var PL_COLORS={asr:"#00e5ff",ack:"#7c4dff",interim:"#ff6ec7",intent:"#ffab00",llm:"#00ff88",tts:"#ffd600",playback:"#ff4081",screen:"#80ff00"};
 function fmtPipelineMs(ms){if(ms>=10000)return(ms/1000).toFixed(1)+'s';if(ms>=1000)return(ms/1000).toFixed(2)+'s';return Math.round(ms)+'ms'}
 function applyPipeline(d){
   if(!pipelineEl)return;
-  if(wvActive){pipelineEl.className='';pipelineEl.innerHTML='';return}
+  if(wvActive||phonePairVisible){pipelineEl.className='';pipelineEl.innerHTML='';return}
   var p=d&&d.pipeline?d.pipeline:null;
   if(!p||!p.stages||typeof p.stages!=='object'||Object.keys(p.stages).length===0){pipelineEl.className='';pipelineEl.innerHTML='';return}
   var total=p.total_ms||0;
@@ -511,7 +570,7 @@ function applyOverlayState(source){
 }
 function applyIntent(d){
   if(!intentEl)return;
-  if(!asrOverlayVisible){intentEl.className="";intentEl.textContent="";return;}
+  if(!asrOverlayVisible||phonePairVisible){intentEl.className="";intentEl.textContent="";return;}
   var asr=d&&d.diag&&d.diag.asr?d.diag.asr:null;
   var intent=d&&d.diag&&d.diag.intent?d.diag.intent:null;
   if((!asr||typeof asr!=="object")&&(!intent||typeof intent!=="object")){intentEl.className="";intentEl.textContent="";return}
@@ -615,6 +674,10 @@ function diagRestFallbackActive(){
 function pollMood(){
   fetch("/api/mood").then(function(r){return r.json()}).then(function(d){
     moveActive=!!d.move_active;
+    if(!!d.webview_url!==wvActive || (d.webview_url && wv.src!==d.webview_url)){
+      setWebview(d.webview_url||null);
+    }
+    applyPhonePairState(d);
     applyPixelText(d);
     applyOverlayState(d);
     if(diagRestFallbackActive()){
@@ -623,9 +686,6 @@ function pollMood(){
     }
     if(d.speaking){
       speakingUntilMs=Math.max(speakingUntilMs,performance.now()+Math.max(0,d.speaking_remaining_seconds||0)*1000);
-    }
-    if(!!d.webview_url!==wvActive || (d.webview_url && wv.src!==d.webview_url)){
-      setWebview(d.webview_url||null);
     }
     if(d.mood && d.mood!==moodName){
       moodName=d.mood;
