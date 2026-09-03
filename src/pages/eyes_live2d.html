@@ -22,17 +22,12 @@ iframe{display:none;position:absolute;top:0;left:0;width:100%;height:100%;border
 #pixelText:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(180deg,rgba(255,255,255,.08) 0,rgba(255,255,255,.08) 1px,transparent 1px,transparent 6px);opacity:.24;pointer-events:none}
 #pixelText.streaming:after{content:"▌";display:inline-block;margin-left:4px;animation:pixelBlink .8s steps(2,end) infinite}
 @keyframes pixelBlink{50%{opacity:.12}}
-#phonePair{position:fixed;top:48px;right:6px;z-index:34;width:306px;height:348px;color:#f7efe5;opacity:0;transform:translateX(20px) scale(.96);pointer-events:none;transition:opacity 160ms ease,transform 160ms ease}
+#phonePair{position:fixed;right:12px;bottom:12px;z-index:34;width:150px;padding:7px 7px 8px;border:1px solid rgba(244,180,95,.42);border-radius:13px;background:rgba(5,6,8,.78);box-shadow:0 10px 24px rgba(0,0,0,.36);color:#f7efe5;opacity:0;transform:translateY(12px) scale(.96);pointer-events:none;transition:opacity 160ms ease,transform 160ms ease}
 #phonePair.on{opacity:1;transform:none}
-#phonePair .pairTop{position:absolute;top:0;left:50%;display:flex;align-items:center;gap:7px;transform:translateX(-50%);padding:0 10px;color:rgba(244,180,95,.94);font:700 11px/1 "WenQuanYi Micro Hei","Microsoft YaHei",sans-serif;letter-spacing:.15em;white-space:nowrap}
-#phonePair .pairDot{width:6px;height:6px;border-radius:50%;background:#f4b45f;box-shadow:0 0 12px rgba(244,180,95,.72)}
-#phonePair .pairEye{position:absolute;top:25px;left:0;width:100%;height:242px;display:grid;place-items:center;isolation:isolate}
-#phonePair .pairEye:before{content:"";position:absolute;inset:0;border:1px solid rgba(244,180,95,.8);border-radius:50%;background:linear-gradient(145deg,#fffef9 0%,#f2e9d9 52%,#d8bd88 100%);box-shadow:0 18px 40px rgba(0,0,0,.48),0 0 24px rgba(244,180,95,.18),inset 0 1px rgba(255,255,255,.96);z-index:-2}
-#phonePair .pairEye:after{content:"";position:absolute;inset:10px 14px;border:1px solid rgba(244,180,95,.58);border-radius:50%;background:radial-gradient(circle at 50% 44%,#49321d 0%,#1a120d 45%,#080706 76%);box-shadow:inset 0 0 0 7px rgba(0,0,0,.14);z-index:-1}
-#phonePair .pairIris{display:grid;width:222px;height:222px;place-items:center;border:1px solid rgba(244,180,95,.72);border-radius:50%;background:radial-gradient(circle at 50% 44%,rgba(98,65,34,.96),rgba(16,11,8,.98) 70%);box-shadow:0 0 0 8px rgba(0,0,0,.14),0 0 24px rgba(244,180,95,.2)}
-#phonePair .pairQr{display:block;width:202px;height:202px;margin:0;padding:10px;border-radius:14px;background:#fff;box-shadow:0 8px 20px rgba(0,0,0,.36)}
-#phonePair .pairTitle{position:absolute;right:0;bottom:42px;left:0;color:#f7efe5;font:700 16px/1.2 "WenQuanYi Micro Hei","Microsoft YaHei",sans-serif;letter-spacing:-.02em;text-align:center}
-#phonePair .pairHint{position:absolute;right:0;bottom:18px;left:0;color:rgba(247,239,229,.65);font:11px/1.35 "WenQuanYi Micro Hei","Microsoft YaHei",sans-serif;text-align:center}
+#phonePair .pairTop{display:flex;align-items:center;gap:5px;color:rgba(244,180,95,.92);font:700 9px/1 "WenQuanYi Micro Hei","Microsoft YaHei",sans-serif;letter-spacing:.12em}
+#phonePair .pairDot{width:5px;height:5px;border-radius:50%;background:#f4b45f;box-shadow:0 0 8px rgba(244,180,95,.62)}
+#phonePair .pairQr{display:block;width:134px;height:134px;margin:6px auto 0;padding:7px;border-radius:9px;background:#fff;box-shadow:0 5px 14px rgba(0,0,0,.3)}
+#phonePair .pairTitle,#phonePair .pairHint{display:none}
 body.phone-pair-active #pixelText,body.phone-pair-active #pipelineOverlay,body.phone-pair-active #intentOverlay{display:none!important}
 #pipelineOverlay{position:fixed;top:4px;left:4px;z-index:25;pointer-events:none;display:none;opacity:0;transition:opacity .4s ease}
 #pipelineOverlay.on{display:block;opacity:1}
@@ -61,7 +56,7 @@ body.phone-pair-active #pixelText,body.phone-pair-active #pipelineOverlay,body.p
 <iframe id="wv"></iframe>
 <aside id="phonePair" aria-live="polite" aria-label="手机语音二维码">
   <div class="pairTop"><i class="pairDot" aria-hidden="true"></i>手机语音</div>
-  <div class="pairEye" aria-hidden="true"><div class="pairIris"><img class="pairQr" id="phonePairQr" alt="扫码用手机向泽宝说话"></div></div>
+  <img class="pairQr" id="phonePairQr" alt="扫码用手机向泽宝说话">
   <div class="pairTitle">扫码，说给泽宝</div>
   <div class="pairHint" id="phonePairHint">按住说话，松开即发送</div>
 </aside>
@@ -405,9 +400,6 @@ function fillMorphedBlob(a,b,p){
   ctx.fill();
 }
 function currentEyeLayout(){
-  if(phonePairVisible){
-    return {leftX:132,rightX:352,mouthX:242,scale:.74};
-  }
   return {leftX:220,rightX:580,mouthX:400,scale:1};
 }
 function drawMorphedExpression(fromFace,toFace,p){
