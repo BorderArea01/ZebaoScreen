@@ -129,6 +129,8 @@ def test_eyes_page_uses_a_non_webview_phone_pair_overlay() -> None:
     page = (SOURCE_ROOT / "pages" / "eyes_live2d.html").read_text(encoding="utf-8")
 
     assert 'id="phonePair"' in page
+    assert 'class="pairEye"' in page
+    assert 'class="pairIris"' in page
     assert "function applyPhonePairState(source)" in page
     assert "function currentEyeLayout()" in page
     assert 'fetch("/api/phone-pair"' in page
