@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field
 DAEMON_HOST = os.environ.get("DAEMON_HOST", "192.167.123.1")
 DAEMON_PORT = os.environ.get("DAEMON_PORT", "8000")
 DAEMON_WS_URL = f"ws://{DAEMON_HOST}:{DAEMON_PORT}/api/move/ws/updates"
+EYES_SERVER_HOST = os.environ.get("EYES_SERVER_HOST", "127.0.0.1").strip() or "127.0.0.1"
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -62,6 +63,7 @@ _DIAG_FINAL_SEEN_CAPACITY = 512
 _diag_final_backlog: deque[dict[str, Any]] = deque()
 _diag_final_seen_order: deque[str] = deque()
 _diag_final_seen_ids: set[str] = set()
+_diag_final_evictions = 0
 _last_activity = time.monotonic()
 _lock = threading.Lock()
 
@@ -83,7 +85,7 @@ _PHONE_PAIR_DEFAULT_VISIBLE = os.getenv(
     "ZEBAO_PHONE_PAIR_DEFAULT_VISIBLE",
     "1",
 ).strip().casefold() not in {"0", "false", "no", "off"}
-_phone_pair = {
+_phone_pair: dict[str, Any] = {
     # The robot microphone is not reliable enough to be the only public
     # input. Keep the phone entrance visible by default; it remains an
     # overlay owned by this screen service, never an arbitrary web page.
@@ -394,7 +396,7 @@ def _validate_phone_pairing_payload(payload: object) -> tuple[str, str, float]:
     if not bool(payload.get("secure_transport")):
         message = "二维码需要安全连接"
     try:
-        invitation_seconds = float(payload.get("pairing_expires_in_seconds"))
+        invitation_seconds = float(str(payload.get("pairing_expires_in_seconds")))
     except (TypeError, ValueError):
         invitation_seconds = _PHONE_PAIRING_FALLBACK_REFRESH_SECONDS
     if invitation_seconds <= _PHONE_PAIRING_REFRESH_MARGIN_SECONDS:
@@ -538,6 +540,13 @@ async def get_mood():  # type: ignore[no-untyped-def]
             "speaking_remaining_seconds": speaking_remaining,
             "pipeline": _pipeline_data if _pipeline_until > now else {},
             "diag": _diag_state if _diag_until > now else {},
+            "diag_delivery": {
+                "final_backlog": len(_diag_final_backlog),
+                "final_backlog_capacity": _DIAG_FINAL_BACKLOG_CAPACITY,
+                "final_seen": len(_diag_final_seen_ids),
+                "final_evictions": _diag_final_evictions,
+                "subscribers": len(_diag_subscribers),
+            },
             "overlays": _overlay_snapshot_locked(),
             "phone_pair": _phone_pair_public_state_locked(now),
         }
@@ -626,7 +635,7 @@ async def diag_websocket(websocket: WebSocket) -> None:
                     )
                     continue
 
-                global _diag_state, _diag_until, _pipeline_data, _pipeline_until, _last_activity
+                global _diag_state, _diag_until, _pipeline_data, _pipeline_until, _last_activity, _diag_final_evictions
                 now = time.monotonic()
                 pipeline = payload.get("pipeline")
                 diag = {key: value for key, value in payload.items() if key != "pipeline"}
@@ -654,18 +663,16 @@ async def diag_websocket(websocket: WebSocket) -> None:
                     with _lock:
                         duplicate = final_id in _diag_final_seen_ids
                         subscribers = tuple(_diag_subscribers)
-                        if subscribers:
-                            delivery_has_capacity = all(
-                                len(subscriber.finals)
-                                < _DIAG_FINAL_BACKLOG_CAPACITY
-                                for subscriber in subscribers
-                            )
-                        else:
-                            delivery_has_capacity = (
-                                len(_diag_final_backlog)
-                                < _DIAG_FINAL_BACKLOG_CAPACITY
-                            )
-                        accepted = duplicate or delivery_has_capacity
+                        # Acceptance is not contingent on a kiosk consuming
+                        # historical messages. Keep bounded recent finals so
+                        # headless or slow displays cannot stall the producer.
+                        if not duplicate:
+                            queues = [s.finals for s in subscribers] if subscribers else [_diag_final_backlog]
+                            for queue in queues:
+                                while len(queue) >= _DIAG_FINAL_BACKLOG_CAPACITY:
+                                    queue.popleft()
+                                    _diag_final_evictions += 1
+                        accepted = True
                         if accepted and not duplicate:
                             _diag_state = diag
                             _diag_until = float("inf") if diag else 0.0
@@ -921,7 +928,7 @@ async def get_phone_pair(request: Request) -> dict[str, object]:
         qr_svg = str(_phone_pair["qr_svg"] or "") if bool(state["visible"]) else ""
         message = str(_phone_pair["message"] or "") if qr_svg else ""
         refresh_at = float(_phone_pair.get("refresh_at") or 0.0)
-        refresh_after_seconds = (
+        remaining_refresh_seconds = (
             max(10.0, round(refresh_at - current, 1))
             if bool(state["persistent"]) and refresh_at > 0.0
             else None
@@ -933,7 +940,7 @@ async def get_phone_pair(request: Request) -> dict[str, object]:
         "qr_svg": qr_svg,
         "message": message,
         "phone_pair": state,
-        "refresh_after_seconds": refresh_after_seconds,
+        "refresh_after_seconds": remaining_refresh_seconds,
     }
 
 
@@ -1042,4 +1049,4 @@ async def clear_webview():  # type: ignore[no-untyped-def]
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host=EYES_SERVER_HOST, port=8080)
